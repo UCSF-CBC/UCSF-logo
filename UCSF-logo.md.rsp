@@ -1,0 +1,161 @@
+<%@meta title="UCSF logo"%>
+<%@meta author="Henrik Bengtsson"%>
+<%@meta date="2014-09-07"%>
+<style>
+img {
+  background-image:
+     -moz-linear-gradient(45deg, #ccc 25%, transparent 25%,transparent 75%, #ccc 75%, #ccc 100%),
+     -moz-linear-gradient(45deg, #ccc 25%, transparent 25%,transparent 75%, #ccc 75%, #ccc 100%);
+  background-image:
+  -webkit-linear-gradient(45deg, #ccc 25%, transparent 25%,transparent 75%, #ccc 75%, #ccc 100%),
+  -webkit-linear-gradient(45deg, #ccc 25%, transparent 25%,transparent 75%, #ccc 75%, #ccc 100%);
+     -moz-background-size:10px 10px;
+          background-size:10px 10px;
+  -webkit-background-size:10px 10px;
+  background-position:0 0, 5px 5px;
+}
+
+.img-result {
+  border: 1px solid black;
+}
+
+.img-box {
+  float:left;
+  text-align:center;
+  margin: 1ex;
+}
+
+.text_line {
+  clear:both;
+  margin-bottom:2px;
+}
+</style>
+
+<% imgBox <- function(p) { %>
+<div class="img-box">
+<small><small><a href="<%=p%>"><%=basename(p)%></a></small></small><br/>
+<img src="<%=p%>" class="img-result" width="240"/><br/>
+<small><small>Dimension: <%=dimension(p)%></small></small><br/>
+</div>
+<% } # imgBox() %>
+
+<%
+R.utils::use("R.utils")
+options(deparse.cutoff=110)
+%>
+
+# <%@meta name="title"%>
+<%@meta name="author"%> on <%@meta name="date"%>
+
+## Download the original logo from UCSF
+
+```r
+<%=evalCapture({
+R.utils::use("R.utils, tools")
+url <- "http://identity.ucsf.edu/images/downloads/official/ucsf_logo_K_OTL_9.eps.zip"
+epsZ <- downloadFile(url, path="images/src")
+eps <- unzip(epsZ, files=file_path_sans_ext(basename(epsZ)), exdir="images/src")
+})%>
+```
+
+## R wrapper for ImageMagick's convert tool
+
+```r
+<%=evalCapture({
+convert <- function(...) {
+  args <- list(...)
+  flags <- which(sapply(args, FUN=isTRUE))
+  keys <- names(args)
+  isSrc <- (keys == "src")
+  isDest <- (keys == "dest")
+  keys <- sprintf("-%s", keys)
+  keys[(keys == "-") | isSrc | isDest] <- ""
+  args <- unlist(args)
+
+  # Source file
+  src <- unname(args[isSrc])
+  src <- Arguments$getReadablePathname(src)
+  args[isSrc] <- normalizePath(src)
+
+  # Destination file
+  dest <- unname(args[isDest])
+  # Skip?
+  if (isFile(dest)) return(getRelativePath(dest))
+  dest <- Arguments$getWritablePathname(dest, mustNotExist=FALSE)
+  dest <- normalizePath(dest)
+  args[isDest] <- dest
+  
+  args[flags] <- ""
+  args <- sprintf("%s %s", keys, args)
+  args <- paste(c("convert", args), collapse=" ")
+  args <- gsub("[ ]+", " ", args, fixed=TRUE)
+  message(args)
+  shell(args)
+  getRelativePath(dest)
+} # convert()
+
+dimension <- function(pathname, ...) {
+  shell(sprintf("identify -format %%G %s", pathname), intern=TRUE)
+} # dimension()
+})%>
+```
+
+## Convert EPS to trimmed high-resolution PNG
+```r
+<%=evalCapture({
+name <- "ucsf_logo_K_OTL_9"
+dpi <- 1200
+pngA <- convert(density=dpi, src=eps, trim=TRUE, dest=sprintf("images/%s,%ddpi.png", name, dpi))
+pngA
+})%>
+```
+<p class="text_line"/>
+<% imgBox(pngA) %>
+<p class="text_line"/>
+
+
+## Trimmed high-resolution monochrome PNG with transparent background
+```r
+<%=evalCapture({
+pngB <- convert(src=pngA, colors=2, depth=1, transparent="white", dest=sprintf("%s,000000,transparent.png", file_path_sans_ext(pngA)))
+pngB
+})%>
+```
+<p class="text_line"/>
+<% imgBox(pngB) %>
+<p class="text_line"/>
+
+
+### Same with different foreground colors
+```r
+<%=evalCapture({
+# UCSF colors [http://www.ucsf.edu/sites/default/files/fields/field_insert_file/landing_page_one/ucsf_id_sec10_mar12.pdf]
+primary <- c("#88bbbb", "#000000", "#bbbbaa", "#003366")
+secondary <- c(
+ "#999933", "#cccc66", "#7799bb", "#99bbcc",
+ "#666699", "#9999cc", "#990000", "#ffcc99",
+ "#cc6600", "#ffcc66", "#cc9933", "#ffcc66")
+grays <- c("#eeeeee", "#e6e6e6", "#cccccc", "#999999", "#666666")
+pastels <- c(
+ "#ddeeee", "#d7e7e7", "#eeffff", "#cceeee",
+ "#ffeeee", "#ffffdd", "#faf2e3", "#ffddbb",
+ "#eeeedd", "#eeeecc", "#ddddaa")
+banner <- c("#77aaaa", "#aaaa99", "#000000", "#666666")
+
+
+cols <- c(primary, secondary, grays, pastels, banner, "#ffffff")
+
+col <- cols[1]
+pngC <- convert(src=pngB, fill=col, opaque="black", dest=sprintf("%s,%s,transparent.png", file_path_sans_ext(pngA), gsub("#", "", col)))
+pngC
+})%>
+```
+<p class="text_line"/>
+<% for (col in cols) { %>
+ <% imgBox(convert(src=pngB, fill=col, opaque="black", dest=sprintf("%s,%s,transparent.png", file_path_sans_ext(pngA), gsub("#", "", col)))) %>
+<% } # for (fgcol in cols) %>
+<p class="text_line"/>
+
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Copyright Henrik Bengtsson (2014) - Powered by [RSP](http://cran.r-project.org/package=R.rsp)
